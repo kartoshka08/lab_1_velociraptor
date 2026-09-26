@@ -1,0 +1,28 @@
+name: Custom.Detection.PersistenceDelta
+description: Monitors registry Run/RunOnce keys and Scheduled Tasks for changes.
+
+type: CLIENT
+
+parameters:
+  - name: SuppressDuration
+    default: 3600
+    type: int
+
+sources:
+  - precondition:
+      SELECT OS FROM info() WHERE OS = 'windows'
+    query: |
+      LET RunKeys = SELECT
+        Name,
+        FullPath,
+        Data.value AS Value,
+        "RunKey" AS Type
+      FROM glob(globs="HKEY_USERS/*/SOFTWARE/Microsoft/Windows/CurrentVersion/Run/*", accessor="registry")
+
+      LET Tasks = SELECT
+        Name,
+        ActionPath AS Value,
+        "ScheduledTask" AS Type
+      FROM Artifact.Windows.System.TaskScheduler()
+
+      SELECT * FROM RunKeys
