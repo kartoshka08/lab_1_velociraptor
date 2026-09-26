@@ -1,0 +1,57 @@
+---
+- name: Deploy Velociraptor client on Debian
+  hosts: velociraptor_clients
+  become: yes
+  vars:
+    velo_server_url: "http://velociraptor.lab:9000"
+    velo_bin_src: "velociraptor-linux"
+    velo_cfg_src: "client.linux.yaml"
+    velo_work_dir: "/opt/velociraptor-install"
+
+  tasks:
+    - name: Check if velociraptor client is already installed
+      stat:
+        path: /usr/local/bin/velociraptor
+      register: velo_bin
+
+    - name: Create work directory
+      file:
+        path: "{{ velo_work_dir }}"
+        state: directory
+        mode: '0755'
+
+    - name: Download velociraptor binary (if not installed)
+      get_url:
+        url: "{{ velo_server_url }}/{{ velo_bin_src }}"
+        dest: "{{ velo_work_dir }}/velociraptor"
+        mode: '0755'
+      when: not velo_bin.stat.exists
+
+    - name: Download client config (if not installed)
+      get_url:
+        url: "{{ velo_server_url }}/{{ velo_cfg_src }}"
+        dest: "{{ velo_work_dir }}/client.linux.yaml"
+        mode: '0644'
+      when: not velo_bin.stat.exists
+
+    - name: Build .deb package (if not installed)
+      command:
+        cmd: "{{ velo_work_dir }}/velociraptor --config {{ velo_work_dir }}/client.linux.yaml debian client"
+        chdir: "{{ velo_work_dir }}"
+      when: not velo_bin.stat.exists
+
+    - name: Install .deb package (if not installed)
+      apt:
+        deb: "{{ velo_work_dir }}/velociraptor_client_0.77.1_amd64.deb"
+      when: not velo_bin.stat.exists
+      register: install_result
+
+    - name: Ensure velociraptor client service is running
+      systemd:
+        name: velociraptor_client
+        state: started
+        enabled: yes
+
+    - name: Report final status
+      debug:
+        msg: "Velociraptor client installed: {{ not velo_bin.stat.exists }} | Service status checked"
