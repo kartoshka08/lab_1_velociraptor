@@ -1,0 +1,30 @@
+name: Custom.Detection.NewInTemp.Windows
+description: Detects executable files created in user-writable temp directories within the last 24 hours.
+
+type: CLIENT
+
+parameters:
+  - name: DaysBack
+    default: 1
+    type: int
+
+sources:
+  - precondition:
+      SELECT OS FROM info() WHERE OS = 'windows'
+    query: |
+      LET temp_paths = (
+        "C:/Windows/Temp/**/*.{exe,dll,ps1,bat,vbs,js,hta,cmd}",
+        "C:/Users/*/AppData/Local/Temp/**/*.{exe,dll,ps1,bat,vbs,js,hta,cmd}",
+        "C:/Temp/**/*.{exe,dll,ps1,bat,vbs,js,hta,cmd}"
+      )
+
+      SELECT
+        FullPath,
+        Size,
+        Mtime,
+        Btime,
+        timestamp(epoch=Btime) AS Created,
+        hash(path=FullPath, accessor="file").SHA256 AS SHA256
+      FROM glob(globs=temp_paths)
+      WHERE Btime > now() - (DaysBack * 86400)
+      ORDER BY Btime DESC
