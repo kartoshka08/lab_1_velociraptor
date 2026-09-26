@@ -1,0 +1,33 @@
+name: Custom.Detection.NewInTemp.Linux
+description: |
+  Detects executable files created in /tmp and /var/tmp within the last 24 hours.
+  Linux staging behavior for malware and reverse shells.
+
+type: CLIENT
+
+parameters:
+  - name: DaysBack
+    default: 1
+    type: int
+    description: How many days back to search for created files
+
+sources:
+  - precondition:
+      SELECT OS FROM info() WHERE OS =~ 'linux'
+
+    query: |
+      SELECT
+        FullPath,
+        Size,
+        Mtime,
+        Btime,
+        timestamp(epoch=Btime) AS Created,
+        hash(path=FullPath, accessor="file").SHA256 AS SHA256,
+        Mode
+      FROM glob(globs=[
+        "/tmp/**/*",
+        "/var/tmp/**/*"
+      ])
+      WHERE Btime > now() - (DaysBack * 86400)
+        AND Mode =~ "x"
+      ORDER BY Btime DESC
