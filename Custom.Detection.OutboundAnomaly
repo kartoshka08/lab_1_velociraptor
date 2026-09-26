@@ -1,0 +1,34 @@
+name: Custom.Detection.OutboundAnomaly
+description: |
+  Detects established outbound network connections to external IP addresses
+  on non-standard ports. Excludes private RFC1918 ranges and common ports.
+
+type: CLIENT
+
+parameters:
+  - name: ExcludePorts
+    default: "80,443,53,123,8080,8443"
+    type: string
+    description: Comma-separated list of ports to exclude
+
+sources:
+  - precondition:
+      SELECT OS FROM info() WHERE OS = 'windows'
+
+    query: |
+      LET ExcludedPorts = split(string=ExcludePorts, sep=",")
+
+      SELECT
+        Pid,
+        Name,
+        Status,
+        Laddr.IP AS LocalIP,
+        Laddr.Port AS LocalPort,
+        Raddr.IP AS RemoteIP,
+        Raddr.Port AS RemotePort,
+        timestamp(epoch=now()) AS DetectedAt
+      FROM netstat()
+      WHERE Status = "ESTABLISHED"
+        AND NOT Raddr.IP =~ "^(10\\.|172\\.(1[6-9]|2[0-9]|3[01])\\.|192\\.168\\.|127\\.)"
+        AND NOT Raddr.Port IN ExcludedPorts
+      ORDER BY RemotePort
